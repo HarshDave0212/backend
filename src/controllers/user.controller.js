@@ -8,7 +8,7 @@ import { response } from "express";
 const registerUser = asyncHandler(async (req, res) => {
   // get user details from frontend
   const { fullName, email, username, password } = req.body;
-  console.log("email:", email);
+  // console.log("email:", email);
 
   // validation - not empty
   if (fullName === "" || email === "" || username === "" || password === "") {
@@ -22,6 +22,7 @@ const registerUser = asyncHandler(async (req, res) => {
   if (existedUser) {
     throw new ApiError(409, "User already exist");
   }
+  // console.log(req.files);
 
   // check for images check for avatar
   const avatarLocalPath = req.files?.avatar[0]?.path;
