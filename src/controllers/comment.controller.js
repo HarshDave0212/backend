@@ -1,14 +1,87 @@
-import mongoose from "mongoose";
+import mongoose, { isValidObjectId } from "mongoose";
 import { Comment } from "../models/comment.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { isValidElement } from "react";
 
 const getVideoComments = asyncHandler(async (req, res) => {
   //TODO: get all comments for a video
   const { videoId } = req.params;
   const { page = 1, limit = 10 } = req.query;
+
+  if (!videoId) {
+    throw new ApiError(400, "VideoId is required");
+  }
+
+  if (!isValidObjectId(videoId)) {
+    throw new ApiError(400, "Video format is invalid");
+  }
+
+  const skip = (Number(page) - 1) * Number(limit);
+
+  const commentsAggregation = await Comment.aggregate([
+    {
+      $match: {
+        video: new mongoose.Types.ObjectId(videoId),
+      },
+    },
+    {
+      $sort: {
+        createdAt: -1,
+      },
+    },
+    {
+      $facet: {
+        metadata: [
+          {
+            $count: "total",
+          },
+        ],
+        data: [
+          { $skip: skip },
+          { $limit: Number(limit) },
+          {
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner",
+            },
+          },
+          {
+            $unwind: "$owner",
+          },
+          {
+            $project: {
+              _id: 1,
+              content: 1,
+              createdAt: 1,
+              updatedAt: 1,
+              "owner._id": 1,
+              "owner.username": 1,
+              "owner.avatar": 1,
+            },
+          },
+        ],
+      },
+    },
+  ]);
+  const total = commentsAggregation[0]?.metadata[0]?.total || 0;
+
+  const comment = commentsAggregation[0]?.data || [];
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        totalComments: total,
+        currentPage: Number(page),
+        totalPages: Math.ceil(total / limit),
+        comment,
+      },
+      "Comments fetcehd successfully"
+    )
+  );
 });
 
 const addComment = asyncHandler(async (req, res) => {
